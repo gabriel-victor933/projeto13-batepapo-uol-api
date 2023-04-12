@@ -193,4 +193,42 @@ app.get("/messages",(req,res)=>{
 })
 
 
+function check(){
+    const now = Date.now() - 10000
+
+    db.collection("participante").find({lastStatus: {$lt: now}}).toArray()
+    .then((data)=>{
+
+        if(data.length !== 0){
+
+            const names = data.map((u) => {return {name: u.name}})
+            const query = {$or: names}
+
+
+            db.collection("participante").deleteMany(query)
+            .then((d)=>{
+
+                if(d.deletedCount > 0){
+                    const messages = names.map(n => {return {from: n.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format("HH:mm:ss")}})
+                    db.collection("mensagem").insertMany(messages)
+                    .then(()=>{
+                        console.log("enviados")
+                    })
+                    .catch((err)=>{
+                        console.log(err)
+                    })
+                }
+                
+            }) 
+            .catch((err)=> console.log(err))
+
+        }
+    })
+    .catch((err)=>{
+        console.log(err)
+    })
+}
+
+setInterval(check,10000)
+
 app.listen(PORT, ()=>{console.log(`rodando na porta ${PORT}`)})
