@@ -34,7 +34,7 @@ const mes = Joi.object({
     type: Joi.alternatives().try(
         Joi.string().valid('message'),
         Joi.string().valid('private_message')
-    )
+    ).required()
 })
 
 
