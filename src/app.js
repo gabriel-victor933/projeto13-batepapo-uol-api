@@ -95,7 +95,7 @@ app.post("/messages",(req,res)=>{
         const message = {...req.body, from: req.headers.user, time:dayjs().format("HH:mm:ss")}
 
 
-        db.collection("mensagem").insertOne({message})
+        db.collection("mensagem").insertOne(message)
         .then(()=>{
             return res.status(201).send("mensagem enviada")
         })
@@ -124,6 +124,41 @@ app.get("/participants",(req,res) => {
         return res.status(500).send(err)
     })
 
+})
+
+app.get("/messages",(req,res)=>{
+
+    const {limit} = req.query
+    const {user} = req.headers
+
+    const querry = { $or: [ { to: "Todos" }, { to: user }, { from: user } ] }
+
+    db.collection("mensagem").find(querry).toArray()
+    .then((data)=> {
+
+        if(limit === undefined){
+            return res.status(200).send(data)
+        }
+
+        if(limit > 0){
+            return res.status(200).send(data.slice(0,limit))
+        }
+
+
+        return res.status(422).send("limit invalido")
+
+        
+        
+        /* else if(limit){
+            return res.status(200).send(data.slice(0,limit))
+        } else {
+            return res.status(200).send(data)
+        } */
+        
+    })
+    .catch((err) =>{
+        return res.status(500).send(err)
+    })
 })
 
 
