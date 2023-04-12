@@ -111,6 +111,37 @@ app.post("/messages",(req,res)=>{
     
 })
 
+app.post("/status",(req,res)=>{
+    const {user} = req.headers
+
+    if(user === undefined){
+        return res.status(404).send("erro")
+    }
+
+    db.collection("participante").find({name: user}).toArray()
+    .then((data)=>{
+
+        if(data.length === 0){
+            return res.sendStatus(404)
+        }
+
+        const update = {$set: { lastStatus: Date.now()}}
+
+        db.collection("participante").updateOne({name: user},update)
+        .then(()=>{
+            return res.status(200).send("ok")
+        })
+        .catch((err)=>{
+            return res.status(500).send(err)
+        })
+
+    })
+    .catch((err)=>{
+        return res.status(500).send(err)
+    })
+
+})
+
 
 // GET server methods
 app.get("/participants",(req,res) => {
