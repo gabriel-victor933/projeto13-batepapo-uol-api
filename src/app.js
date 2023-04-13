@@ -87,6 +87,12 @@ app.post("/messages",(req,res)=>{
         return res.status(422).send(error.details[0].message)
     }
 
+    if(req.headers.user === undefined || req.headers.user.length === 0){
+        console.log(req.headers.user)
+        return res.status(422).send("Usuario não especificado")
+    }
+    
+
     const nome = stripHtml(req.headers.user).result.trim()
 
     db.collection("participants").find({name: nome}).toArray()
@@ -239,24 +245,45 @@ function check(){
 setInterval(check,10000)
 
 
-function teste(){
-    const someHtml = `<!DOCTYPE html>
-<html lang="en" dir="ltr">
-  <head>
-    <meta charset="utf-8">
-    <title></title>
-  </head>
-  <body>
-    <h1>Title</h1>
-    Some text.
-  </body>
-</html>`;
+//DELETE
 
+app.delete("/messages/:id",(req,res)=>{
 
-console.log(stripHtml(someHtml).result)
+    const { user } = req.headers
+    const {id} = req.params
 
-}
+    console.log(user,id)
 
-teste()
+    db.collection("messages").find({_id: new ObjectId(id)}).toArray()
+    .then(([message])=>{
+        console.log(message)
+
+        if(message === undefined){
+            return res.status(404).send("Mensagem não existe")
+        }
+
+        if(user !== message.from){
+            return res.status(401).send("A mensagem não foi enviado pelo usuario")
+        }
+
+        db.collection("messages").deleteOne({_id: new ObjectId(id)})
+        .then((resposta)=>{
+            console.log(resposta)
+            return res.send("Mensagem removida")
+        })
+        .catch((err)=>{
+            console.log(err)
+            return res.sendStatus(500)
+        })
+
+        
+    })
+    .catch((err)=>{
+        console.log(err)
+
+        return res.sendStatus(500)
+    })
+
+})
 
 app.listen(PORT, ()=>{console.log(`rodando na porta ${PORT}`)})
