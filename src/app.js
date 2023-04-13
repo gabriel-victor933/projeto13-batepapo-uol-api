@@ -4,6 +4,7 @@ import dotenv from "dotenv"
 import {MongoClient, ObjectId} from "mongodb"
 import Joi from "joi"
 import dayjs from "dayjs"
+import { stripHtml } from "string-strip-html";
 
 
 //.ENV config
@@ -47,7 +48,9 @@ app.post("/participants",(req,res)=>{
         return res.status(422).send(error.message)
     }
 
-    db.collection("participants").find(req.body).toArray()
+    const name = stripHtml(req.body.name).result.trim()
+
+    db.collection("participants").find({name}).toArray()
     .then((data)=> {
 
         if(data.length !== 0){
@@ -55,12 +58,12 @@ app.post("/participants",(req,res)=>{
         }
 
 
-        db.collection("participants").insertOne({...req.body, lastStatus: Date.now()})
+        db.collection("participants").insertOne({name, lastStatus: Date.now()})
         .then(()=> console.log("inserido"))
         .catch(() => res.sendStatus(500))
 
 
-        const mens = { from: req.body.name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format("HH:mm:ss") }
+        const mens = { from: name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format("HH:mm:ss") }
         db.collection("messages").insertOne(mens)
         .then(()=>{
             return res.status(201).send("OK")
@@ -84,15 +87,19 @@ app.post("/messages",(req,res)=>{
         return res.status(422).send(error.details[0].message)
     }
 
+    const nome = stripHtml(req.headers.user).result.trim()
 
-    db.collection("participants").find({name: req.headers.user}).toArray()
+    db.collection("participants").find({name: nome}).toArray()
     .then((data) => {
 
         if(data.length === 0){
             return res.status(422).send("Usuario não logado")
         }
 
-        const message = {...req.body, from: req.headers.user, time:dayjs().format("HH:mm:ss")}
+        const to = stripHtml(req.body.to).result.trim()
+        const text = stripHtml(req.body.text).result.trim()
+        const type = stripHtml(req.body.type).result.trim()
+        const message = {to,text,type, from: nome, time:dayjs().format("HH:mm:ss")}
 
 
         db.collection("messages").insertOne(message)
@@ -230,5 +237,26 @@ function check(){
 }
 
 setInterval(check,10000)
+
+
+function teste(){
+    const someHtml = `<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title></title>
+  </head>
+  <body>
+    <h1>Title</h1>
+    Some text.
+  </body>
+</html>`;
+
+
+console.log(stripHtml(someHtml).result)
+
+}
+
+teste()
 
 app.listen(PORT, ()=>{console.log(`rodando na porta ${PORT}`)})
