@@ -286,4 +286,75 @@ app.delete("/messages/:id",(req,res)=>{
 
 })
 
+//PUT
+app.put("/messages/:id",(req,res)=>{
+
+    const nome = req.headers.user
+    const { id } = req.params
+
+    const {error} = mes.validate(req.body)
+
+    if(error){
+        return res.status(422).send(error.details[0].message)
+    }
+
+    if(req.headers.user === undefined || req.headers.user.length === 0){
+        console.log(req.headers.user)
+        return res.status(422).send("Usuario não especificado")
+    }
+
+    const to = stripHtml(req.body.to).result.trim()
+    const text = stripHtml(req.body.text).result.trim()
+    const type = stripHtml(req.body.type).result.trim()
+
+    const update = {
+        $set: { to, text, type, from: nome, time: dayjs().format("HH:mm:ss") },
+      };
+
+    db.collection("participants").find({name: nome}).toArray()
+    .then((dados)=>{
+        
+
+        if(dados.length === 0){
+            return res.status(401).send("usuario não existe")
+        }
+
+        db.collection("messages").find({_id: new ObjectId(id)}).toArray()
+        .then(([mensagem])=>{
+
+            if(mensagem === undefined){
+                return res.status(404).send("mensagem não existe")
+            }
+
+            if(mensagem.from !== nome){
+                return res.status(401).send("A mensagem não foi enviado pelo usuario")
+            }
+
+            console.log(mensagem)
+
+            db.collection("messages").updateOne({_id: new ObjectId(id)},update)
+            .then((resposta)=>{
+
+                return res.status(200).send("Mensagem alterada")
+            })
+            .catch((err)=>{
+
+                return res.sendStatus(500)
+            })
+        })
+        .catch((err)=>{
+            return res.status(500).send(err)
+        })
+
+        
+    })
+    .catch((err)=>{
+        console.log(err)
+
+        return res.sendStatus(500)
+    })
+
+})
+
+
 app.listen(PORT, ()=>{console.log(`rodando na porta ${PORT}`)})
