@@ -1,7 +1,7 @@
 import express from "express"
 import cors from "cors"
 import dotenv from "dotenv"
-import {MongoClient} from "mongodb"
+import {MongoClient, ObjectId} from "mongodb"
 import Joi from "joi"
 import dayjs from "dayjs"
 
@@ -47,7 +47,7 @@ app.post("/participants",(req,res)=>{
         return res.status(422).send(error.message)
     }
 
-    db.collection("participante").find(req.body).toArray()
+    db.collection("participants").find(req.body).toArray()
     .then((data)=> {
 
         if(data.length !== 0){
@@ -55,13 +55,13 @@ app.post("/participants",(req,res)=>{
         }
 
 
-        db.collection("participante").insertOne({...req.body, lastStatus: Date.now()})
+        db.collection("participants").insertOne({...req.body, lastStatus: Date.now()})
         .then(()=> console.log("inserido"))
         .catch(() => res.sendStatus(500))
 
 
         const mens = { from: req.body.name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format("HH:mm:ss") }
-        db.collection("mensagem").insertOne(mens)
+        db.collection("messages").insertOne(mens)
         .then(()=>{
             return res.status(201).send("OK")
         })
@@ -85,7 +85,7 @@ app.post("/messages",(req,res)=>{
     }
 
 
-    db.collection("participante").find({name: req.headers.user}).toArray()
+    db.collection("participants").find({name: req.headers.user}).toArray()
     .then((data) => {
 
         if(data.length === 0){
@@ -95,7 +95,7 @@ app.post("/messages",(req,res)=>{
         const message = {...req.body, from: req.headers.user, time:dayjs().format("HH:mm:ss")}
 
 
-        db.collection("mensagem").insertOne(message)
+        db.collection("messages").insertOne(message)
         .then(()=>{
             return res.status(201).send("mensagem enviada")
         })
@@ -118,7 +118,7 @@ app.post("/status",(req,res)=>{
         return res.status(404).send("erro")
     }
 
-    db.collection("participante").find({name: user}).toArray()
+    db.collection("participants").find({name: user}).toArray()
     .then((data)=>{
 
         if(data.length === 0){
@@ -127,7 +127,7 @@ app.post("/status",(req,res)=>{
 
         const update = {$set: { lastStatus: Date.now()}}
 
-        db.collection("participante").updateOne({name: user},update)
+        db.collection("participants").updateOne({name: user},update)
         .then(()=>{
             return res.status(200).send("ok")
         })
@@ -146,7 +146,7 @@ app.post("/status",(req,res)=>{
 // GET server methods
 app.get("/participants",(req,res) => {
 
-    db.collection("participante").find().toArray()
+    db.collection("participants").find().toArray()
     .then((data)=>{
 
         return res.status(201).send(data)
@@ -164,7 +164,7 @@ app.get("/messages",(req,res)=>{
 
     const querry = { $or: [ { to: "Todos" }, { to: user }, { from: user } ] }
 
-    db.collection("mensagem").find(querry).toArray()
+    db.collection("messages").find(querry).toArray()
     .then((data)=> {
 
         if(limit === undefined){
@@ -192,11 +192,11 @@ app.get("/messages",(req,res)=>{
     })
 })
 
-
+//check
 function check(){
     const now = Date.now() - 10000
 
-    db.collection("participante").find({lastStatus: {$lt: now}}).toArray()
+    db.collection("participants").find({lastStatus: {$lt: now}}).toArray()
     .then((data)=>{
 
         if(data.length !== 0){
@@ -205,12 +205,12 @@ function check(){
             const query = {$or: names}
 
 
-            db.collection("participante").deleteMany(query)
+            db.collection("participants").deleteMany(query)
             .then((d)=>{
 
                 if(d.deletedCount > 0){
                     const messages = names.map(n => {return {from: n.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format("HH:mm:ss")}})
-                    db.collection("mensagem").insertMany(messages)
+                    db.collection("messages").insertMany(messages)
                     .then(()=>{
                         console.log("enviados")
                     })
