@@ -17,12 +17,14 @@ app.use(cors())
 const PORT = 5000;
 
 
-//mongodb config
-let db 
 const mongoClient = new MongoClient(process.env.DATABASE_URL)
-mongoClient.connect()
-.then(()=> db = mongoClient.db())
-.catch((err)=> console.log(err))
+try {
+    await mongoClient.connect()
+    console.log("mongoDB connected!!")
+} catch(err){
+    console.log(err)
+}
+const db = mongoClient.db()
 
 // joi validation config
 const part = Joi.object({
@@ -40,7 +42,7 @@ const mes = Joi.object({
 
 
 // POST server methods 
-app.post("/participants",(req,res)=>{
+app.post("/participants",async (req,res)=>{
 
     const { error } = part.validate(req.body);
 
@@ -50,36 +52,30 @@ app.post("/participants",(req,res)=>{
 
     const name = stripHtml(req.body.name).result.trim()
 
-    db.collection("participants").find({name}).toArray()
-    .then((data)=> {
+    try{
+
+        const data = await db.collection("participants").find({name}).toArray()
 
         if(data.length !== 0){
             return res.status(409).send("name is already in use")
         }
 
-
-        db.collection("participants").insertOne({name, lastStatus: Date.now()})
-        .then(()=> console.log("inserido"))
-        .catch(() => res.sendStatus(500))
-
+        await db.collection("participants").insertOne({name, lastStatus: Date.now()})
 
         const mens = { from: name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format("HH:mm:ss") }
-        db.collection("messages").insertOne(mens)
-        .then(()=>{
-            return res.status(201).send("OK")
-        })
-        .catch((err)=> {
-            return res.sendStatus(500)
-        })
+
+        await db.collection("messages").insertOne(mens)
+
+        return res.status(201).send("OK")
 
 
-    })
-    .catch((err) => console.log(err))
-
+    } catch(err){
+        return res.status(500).send(err)
+    }
 
 })
 
-app.post("/messages",(req,res)=>{
+app.post("/messages",async (req,res)=>{
     
     const {error} = mes.validate(req.body)
 
@@ -95,8 +91,10 @@ app.post("/messages",(req,res)=>{
 
     const nome = stripHtml(req.headers.user).result.trim()
 
-    db.collection("participants").find({name: nome}).toArray()
-    .then((data) => {
+
+    try{
+
+        const data = await db.collection("participants").find({name: nome}).toArray()
 
         if(data.length === 0){
             return res.status(422).send("Usuario não logado")
@@ -108,31 +106,27 @@ app.post("/messages",(req,res)=>{
         const message = {to,text,type, from: nome, time:dayjs().format("HH:mm:ss")}
 
 
-        db.collection("messages").insertOne(message)
-        .then(()=>{
-            return res.status(201).send("mensagem enviada")
-        })
-        .catch((err)=>{
-            return res.status(500).send(err)
-        })
-    })
-    .catch((err) => {
-        res.status(500)
-    })
+        await db.collection("messages").insertOne(message)
+
+        return res.status(201).send("mensagem enviada")
 
 
+    } catch(err){
+        return res.status(500).send(err)
+    }
     
 })
 
-app.post("/status",(req,res)=>{
+app.post("/status",async (req,res)=>{
     const {user} = req.headers
 
     if(user === undefined){
         return res.status(404).send("erro")
     }
 
-    db.collection("participants").find({name: user}).toArray()
-    .then((data)=>{
+    try {
+
+        const data = await db.collection("participants").find({name: user}).toArray()
 
         if(data.length === 0){
             return res.sendStatus(404)
@@ -140,18 +134,14 @@ app.post("/status",(req,res)=>{
 
         const update = {$set: { lastStatus: Date.now()}}
 
-        db.collection("participants").updateOne({name: user},update)
-        .then(()=>{
-            return res.status(200).send("ok")
-        })
-        .catch((err)=>{
-            return res.status(500).send(err)
-        })
+        await db.collection("participants").updateOne({name: user},update)
 
-    })
-    .catch((err)=>{
+        return res.status(200).send("ok")
+
+
+    } catch(err){
         return res.status(500).send(err)
-    })
+    }
 
 })
 
@@ -161,7 +151,6 @@ app.get("/participants",(req,res) => {
 
     db.collection("participants").find().toArray()
     .then((data)=>{
-
         return res.status(201).send(data)
     })
     .catch((err) => {
@@ -191,14 +180,6 @@ app.get("/messages",(req,res)=>{
 
         return res.status(422).send("limit invalido")
 
-        
-        
-        /* else if(limit){
-            return res.status(200).send(data.slice(0,limit))
-        } else {
-            return res.status(200).send(data)
-        } */
-        
     })
     .catch((err) =>{
         return res.status(500).send(err)
@@ -206,7 +187,7 @@ app.get("/messages",(req,res)=>{
 })
 
 //check
-function check(){
+async function check(){
     const now = Date.now() - 10000
 
     db.collection("participants").find({lastStatus: {$lt: now}}).toArray()
@@ -240,6 +221,32 @@ function check(){
     .catch((err)=>{
         console.log(err)
     })
+
+
+    try {
+
+        const data = await db.collection("participants").find({lastStatus: {$lt: now}}).toArray()
+
+        if(data.length !== 0){
+
+            const names = data.map((u) => {return {name: u.name}})
+            const query = {$or: names}
+
+            const d = await  db.collection("participants").deleteMany(query)
+
+            if(d.deletedCount > 0){
+                const messages = names.map(n => {return {from: n.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format("HH:mm:ss")}})
+
+                await db.collection("messages").insertMany(messages)
+
+                console.log("enviados")
+            }
+
+        }
+
+    } catch(err){
+        console.log(err)
+    }
 }
 
 setInterval(check,10000)
@@ -247,16 +254,16 @@ setInterval(check,10000)
 
 //DELETE
 
-app.delete("/messages/:id",(req,res)=>{
+app.delete("/messages/:id",async (req,res)=>{
 
     const { user } = req.headers
     const {id} = req.params
 
     console.log(user,id)
 
-    db.collection("messages").find({_id: new ObjectId(id)}).toArray()
-    .then(([message])=>{
-        console.log(message)
+    try{
+
+        const [message] = await db.collection("messages").find({_id: new ObjectId(id)}).toArray()
 
         if(message === undefined){
             return res.status(404).send("Mensagem não existe")
@@ -266,28 +273,18 @@ app.delete("/messages/:id",(req,res)=>{
             return res.status(401).send("A mensagem não foi enviado pelo usuario")
         }
 
-        db.collection("messages").deleteOne({_id: new ObjectId(id)})
-        .then((resposta)=>{
-            console.log(resposta)
-            return res.send("Mensagem removida")
-        })
-        .catch((err)=>{
-            console.log(err)
-            return res.sendStatus(500)
-        })
+        await db.collection("messages").deleteOne({_id: new ObjectId(id)})
 
-        
-    })
-    .catch((err)=>{
-        console.log(err)
+        return res.send("Mensagem removida")
 
-        return res.sendStatus(500)
-    })
+    } catch(err){
+        return res.status(500).send(err)
+    }
 
 })
 
 //PUT
-app.put("/messages/:id",(req,res)=>{
+app.put("/messages/:id",async (req,res)=>{
 
     const nome = req.headers.user
     const { id } = req.params
@@ -311,48 +308,33 @@ app.put("/messages/:id",(req,res)=>{
         $set: { to, text, type, from: nome, time: dayjs().format("HH:mm:ss") },
       };
 
-    db.collection("participants").find({name: nome}).toArray()
-    .then((dados)=>{
-        
+    try{
+
+        const dados = await db.collection("participants").find({name: nome}).toArray()
 
         if(dados.length === 0){
             return res.status(401).send("usuario não existe")
         }
 
-        db.collection("messages").find({_id: new ObjectId(id)}).toArray()
-        .then(([mensagem])=>{
+        const [mensagem] = await db.collection("messages").find({_id: new ObjectId(id)}).toArray() 
 
-            if(mensagem === undefined){
-                return res.status(404).send("mensagem não existe")
-            }
+        if(mensagem === undefined){
+            return res.status(404).send("mensagem não existe")
+        }
 
-            if(mensagem.from !== nome){
-                return res.status(401).send("A mensagem não foi enviado pelo usuario")
-            }
+        if(mensagem.from !== nome){
+            return res.status(401).send("A mensagem não foi enviado pelo usuario")
+        }
 
-            console.log(mensagem)
+        await db.collection("messages").updateOne({_id: new ObjectId(id)},update)
 
-            db.collection("messages").updateOne({_id: new ObjectId(id)},update)
-            .then((resposta)=>{
+        return res.status(200).send("changed")
 
-                return res.status(200).send("Mensagem alterada")
-            })
-            .catch((err)=>{
 
-                return res.sendStatus(500)
-            })
-        })
-        .catch((err)=>{
-            return res.status(500).send(err)
-        })
 
-        
-    })
-    .catch((err)=>{
-        console.log(err)
-
-        return res.sendStatus(500)
-    })
+    } catch(err){
+        return res.status(500).send(err)
+    }
 
 })
 
